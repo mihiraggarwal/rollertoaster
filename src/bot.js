@@ -16,6 +16,8 @@ const client = new Client({
     ],
 });
 
+const emojis = ['🔴','🟠','🟡','🟢','🔵','🟣','🟤','⚫','⚪','🟥','🟧','🟨','🟩','🟦','🟪','🟫','⬛','⬜','🔶','🔷']
+
 const embedDescription = (roles) => {
     const start = `Here are the roles present in the server. You may choose all the ones you wish to assign tasks to\
     \n\n\
@@ -23,7 +25,9 @@ const embedDescription = (roles) => {
     \
     `
     let end = ''
-    roles.forEach(role => {end += `${role}\n`})
+    for (i = 0; i < roles.length; i++) {
+        end += `${emojis[i]} : ${roles[i]}\n`
+    }
     let final = start + end
     return final
 }
@@ -36,12 +40,14 @@ client.on('messageCreate', (message)=>{
     const roles = message.guild.roles.cache.map(role => role.name)
     const desc = embedDescription(roles)
     if(message.mentions.has(client.user.id)){
-        message.reply({ embeds: [
+        message.channel.send({ embeds: [
             new EmbedBuilder()
             .setColor(0x0099FF)
             .setTitle('Rollertoaster')
             .setDescription(desc)
-        ] })
+        ] }).then(eMessage => {
+                emojis.slice(0, roles.length).forEach(emoji => eMessage.react(emoji))
+        })
     }
 })
 
