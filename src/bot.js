@@ -305,9 +305,44 @@ client.on("interactionCreate", async (interaction) => {
             const croll = roles.filter(roll => roll.name == key)
             const id = croll.map(roll => roll.id)
             value.forEach(task => {
-                channel.send(`<@&${id}> ${task}`)
+                channel.send({
+                    content: `<@&${id}> ${task}`,
+                    components: [
+                        new ActionRowBuilder()
+                        .addComponents(
+                            new ButtonBuilder()
+                                .setCustomId("claimTask")
+                                .setLabel("Claim")
+                                .setStyle(ButtonStyle.Primary)
+                        )
+                    ]
+                }).then(message => reactmsg = message)
             })
         }
+        interaction.reply({
+            content: 'Tasks announced!',
+            ephemeral: true
+        })
+    }
+
+    else if (interaction.customId == 'claimTask') {
+        const msg = await interaction.message.fetch()
+        msg.edit({
+            components : [
+                new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId("claimTask")
+                        .setLabel("Claimed")
+                        .setStyle(ButtonStyle.Primary)
+                        .setDisabled(true)
+                )
+            ]
+        })
+        interaction.reply({
+            content: 'Task claimed!',
+            ephemeral: true
+        })
     }
 })
 
