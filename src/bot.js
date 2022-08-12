@@ -25,8 +25,10 @@ let taskBtnState = false
 let tasks = []
 let count = 0
 let taskMsg = ''
+let assignIndex = 0
+let finalAssignment = {}
 
-const embedDescription = (roles) => {
+const embedRolesDescription = (roles) => {
     const start = `Here are the roles present in the server. You may choose all the ones you wish to assign tasks to\
     \n\n\
     **Roles**\n\n\
@@ -38,6 +40,21 @@ const embedDescription = (roles) => {
         assign[emojis[i]] = roles[i]
     }
     let final = start + end
+    return final
+}
+
+const embedTaskAssignment = () => {
+    const start = `Here are the tasks you have created. You may choose all the ones you wish to assign to **${selection[assignIndex]}**\n\n\
+    **Tasks**\n\n\
+    \
+    `
+    let end = ''
+    for (i = 0; i < tasks.length; i++) {
+        end += `${emojis[i]} : ${tasks[i].content}\n`
+        assign[emojis[i]] = tasks[i]
+    }
+    let final = start + end
+    assignIndex++
     return final
 }
 
@@ -94,7 +111,7 @@ client.on('messageCreate', (message)=>{
         })
     }else if(message.mentions.has(client.user.id)){
             const roles = message.guild.roles.cache.map(role => role.name)
-            const desc = embedDescription(roles)
+            const desc = embedRolesDescription(roles)
             message.channel.send({ embeds: [
                 new EmbedBuilder()
                 .setColor(0x0099FF)
@@ -122,6 +139,7 @@ client.on("interactionCreate", async (interaction) => {
                 selection.push(assign[emoji._emoji.name])
             }
         })
+        assign = {}
         msg.edit({ embeds: [
             new EmbedBuilder()
             .setColor(0x0099FF)
@@ -165,11 +183,30 @@ client.on("interactionCreate", async (interaction) => {
                 components : [],
             })
             .then(() => {
-                tasks = []
-                count = 0
                 interaction.reply({
                     content: 'Tasks saved!',
                     ephemeral: true
+                })
+                const desc = embedTaskAssignment()
+                console.log(desc)
+                interaction.channel.send({
+                    embeds: [
+                        new EmbedBuilder()
+                        .setColor(0x0099FF)
+                        .setTitle('Rollertoaster')
+                        .setDescription(desc)
+                    ],
+                    components: [
+                        new ActionRowBuilder()
+                        .addComponents(
+                            new ButtonBuilder()
+                                .setCustomId("assignTask")
+                                .setLabel("Assign")
+                                .setStyle(ButtonStyle.Success)
+                        )
+                    ]
+                }).then(message => {
+                    reactmsg = message
                 })
             })
             
@@ -198,6 +235,8 @@ client.on("interactionCreate", async (interaction) => {
             content: 'Tasks reset!',
             ephemeral: true
         })
+    }else if(interaction.customId == 'assignTask'){
+        
     }
 })
 
