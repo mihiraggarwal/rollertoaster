@@ -16,7 +16,6 @@ const client = new Client({
     ],
 });
 
-
 const emojis = ['🔴','🟠','🟡','🟢','🔵','🟣','🟤','⚫','⚪','🟥','🟧','🟨','🟩','🟦','🟪','🟫','⬛','⬜','🔶','🔷']
 let assign = {}
 let assign2 = {}
@@ -72,7 +71,8 @@ client.on("ready", () => {
     client.channels
 });
 
-client.on('messageCreate', (message)=>{
+client.on('messageCreate', (message) => {
+    
     if(taskBtnState){
         const taskRow = new ActionRowBuilder()
         .addComponents(
@@ -110,23 +110,25 @@ client.on('messageCreate', (message)=>{
             })
             
         })
-    }else if(message.mentions.has(client.user.id)){
-            const roles = message.guild.roles.cache.map(role => role.name)
-            const desc = embedRolesDescription(roles)
-            message.channel.send({ embeds: [
-                new EmbedBuilder()
-                .setColor(0x0099FF)
-                .setTitle('Rollertoaster')
-                .setDescription(desc)
-            ] }).then(eMessage => {
-                    emojis.slice(0, roles.length).forEach(emoji => eMessage.react(emoji))
-                    reactmsg = eMessage
-            })
-            message.channel.send({
-                content: "Once you have selected the roles, you may begin adding the tasks.",
-                components: [finReactBtn]
-            })
-        }
+    }
+    
+    else if(message.mentions.has(client.user.id)) {
+        const roles = message.guild.roles.cache.map(role => role.name)
+        const desc = embedRolesDescription(roles)
+        message.channel.send({ embeds: [
+            new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle('Rollertoaster')
+            .setDescription(desc)
+        ] }).then(eMessage => {
+                emojis.slice(0, roles.length).forEach(emoji => eMessage.react(emoji))
+                reactmsg = eMessage
+        })
+        message.channel.send({
+            content: "Once you have selected the roles, you may begin adding the tasks.",
+            components: [finReactBtn]
+        })
+    }
 })
 
 client.on("interactionCreate", async (interaction) => {
@@ -166,7 +168,9 @@ client.on("interactionCreate", async (interaction) => {
                 taskBtnState = true
             })
         })
-    }else if(interaction.customId == 'confirmTask'){
+    }
+    
+    else if(interaction.customId == 'confirmTask') {
         taskBtnState = false
         interaction.channel.messages.fetch(taskMsg)
         .then(msg => {
@@ -212,7 +216,9 @@ client.on("interactionCreate", async (interaction) => {
             })
             
         })
-    }else if(interaction.customId == 'resetTask'){
+    }
+    
+    else if(interaction.customId == 'resetTask') {
         count = 0
         interaction.channel.messages.fetch(taskMsg)
         .then(msg => {
@@ -236,7 +242,9 @@ client.on("interactionCreate", async (interaction) => {
             content: 'Tasks reset!',
             ephemeral: true
         })
-    }else if(interaction.customId == 'assignTask'){
+    }
+    
+    else if(interaction.customId == 'assignTask') {
         const msg = await reactmsg.fetch()
         const reacts = await msg.reactions.cache
         finalAssignment[selection[assignIndex]] = []
@@ -245,14 +253,12 @@ client.on("interactionCreate", async (interaction) => {
                 finalAssignment[selection[assignIndex]].push(assign2[emoji._emoji.name])
             }
         })
-        console.log(finalAssignment)
         assignIndex++
         msg.edit({
             components: []
         })
 
         if (assignIndex < selection.length) {
-            
             const desc = embedTaskAssignment()
             interaction.channel.send({
                 embeds: [
@@ -276,9 +282,32 @@ client.on("interactionCreate", async (interaction) => {
             })
         }
         else {
-            interaction.channel.send('Tasks have been assigned to all roles')
+            const channel = interaction.client.channels.cache.find(channel => channel.name === "announcements")
+            interaction.channel.send({
+                content: `Tasks have been assigned to all roles. Press the button below to announce all tasks in <#${channel.id}>.`,
+                components: [
+                    new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId("announceTask")
+                            .setLabel("Announce")
+                            .setStyle(ButtonStyle.Primary)
+                    )
+                ]
+            })
         }
-        
+    }
+
+    else if (interaction.customId == 'announceTask') {
+        const channel = interaction.client.channels.cache.find(channel => channel.name === "announcements")
+        const roles = interaction.guild.roles.cache
+        for (const [key, value] of Object.entries(finalAssignment)) {
+            const croll = roles.filter(roll => roll.name == key)
+            const id = croll.map(roll => roll.id)
+            value.forEach(task => {
+                channel.send(`<@&${id}> ${task}`)
+            })
+        }
     }
 })
 
