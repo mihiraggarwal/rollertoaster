@@ -7,11 +7,21 @@ const {
     ButtonStyle,
     EmbedBuilder,
 } = require("discord.js");
+const mongoose = require("mongoose");
+const Servers = require("../models/Servers");
+const table = require("table");
+
+mongoose.connect(process.env.DB_URI,{ 
+    useNewUrlParser: true, 
+    useUnifiedTopology: true 
+}).then(() => console.log('MongoDB Connected'))
+.catch(err => console.log(err))
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMembers,
         GatewayIntentBits.MessageContent,
     ],
 });
@@ -26,7 +36,7 @@ let tasks = []
 let count = 0
 let taskMsg = ''
 let assignIndex = 0
-let finalAssignment = {}
+let verifyState = false
 
 const embedRolesDescription = (roles) => {
     const start = `Here are the roles present in the server. You may choose all the ones you wish to assign tasks to\
@@ -66,9 +76,8 @@ const finReactBtn = new ActionRowBuilder()
         .setStyle(ButtonStyle.Primary)
     )
 
-client.on("ready", () => {
+client.on("ready", (resp) => {
     console.log(`Logged in as ${client.user.tag}!`);
-    client.channels
 });
 
 client.on('messageCreate', (message)=>{
@@ -109,23 +118,99 @@ client.on('messageCreate', (message)=>{
             })
             
         })
+    }else if(verifyState){
+        const members = message.mentions.members.map(member => member.user.username)
+        Servers.findOne({serverId : message.guild.id})
+        .then(doc => {
+            for(i = 0; i < members.length; i++) {
+               if(doc.memberInfo[members[i]] == undefined) {
+                   doc.memberInfo[members[i]] = 0
+               }else{
+                     doc.memberInfo[members[i]]++
+               }
+            }
+
+            doc.markModified('memberInfo')
+            doc.save()
+            .then(()=>{
+                message.reply('Leaderboard Updated')
+            })
+            .catch(err => console.log(err))
+        })
+        .catch(err => console.log(err))
+        
+        verifyState = false
+    }else if(message.mentions.has(client.user.id) && message.content.includes("authenticate")){
+        Servers.findOne({serverId : message.guild.id})
+        .then(doc => {
+            if(doc){
+                message.channel.send('Your server is already authenticated.')
+            }else{
+                message.guild.members.fetch({force : true})
+                .then(memb => {
+                    const members = memb.map(member => member.user.username)
+                    const memberInfo = {}
+                    for(i = 0; i < members.length; i++) {
+                        memberInfo[members[i]] = 0
+                    }
+                    newServer = new Servers({
+                        serverId : message.guild.id,
+                        serverName : message.guild.name,
+                        memberInfo : memberInfo,
+                    })
+            
+                    newServer.save()
+                    .then(()=>{
+                        message.reply('You have been authenticated :thumbsup:')
+                    })
+                    .catch(err => console.log(err))
+                })
+                .catch(err => console.log(err))
+            }
+        })
+        .catch(err => console.log(err))
+    }else if(message.mentions.has(client.user.id) && message.content.includes("leaderboard")){
+        Servers.findOne({serverId : message.guild.id})
+        .then(doc => {
+            let data = [['Users', 'Points']]
+            for(member in doc.memberInfo){
+                data.push([member, doc.memberInfo[member].toString()])
+            }
+
+            config = {
+                border: table.getBorderCharacters("ramac")
+            }
+            
+            const newTable = "```\n" + table.table(data, config) + "```"
+
+            message.reply({
+                content: newTable,
+            })
+        })
+        .catch(err => console.log(err))
+    }else if(message.mentions.has(client.user.id) && message.content.includes("verify")){
+        message.channel.send({
+            content: "Please mention the members you wish to verify.",
+        }).then(() => {
+            verifyState = true
+        })
     }else if(message.mentions.has(client.user.id)){
-            const roles = message.guild.roles.cache.map(role => role.name)
-            const desc = embedRolesDescription(roles)
-            message.channel.send({ embeds: [
-                new EmbedBuilder()
-                .setColor(0x0099FF)
-                .setTitle('Rollertoaster')
-                .setDescription(desc)
-            ] }).then(eMessage => {
-                    emojis.slice(0, roles.length).forEach(emoji => eMessage.react(emoji))
-                    reactmsg = eMessage
-            })
-            message.channel.send({
-                content: "Once you have selected the roles, you may begin adding the tasks.",
-                components: [finReactBtn]
-            })
-        }
+        const roles = message.guild.roles.cache.map(role => role.name)
+        const desc = embedRolesDescription(roles)
+        message.channel.send({ embeds: [
+            new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle('Rollertoaster')
+            .setDescription(desc)
+        ] }).then(eMessage => {
+                emojis.slice(0, roles.length).forEach(emoji => eMessage.react(emoji))
+                reactmsg = eMessage
+        })
+        message.channel.send({
+            content: "Once you have selected the roles, you may begin adding the tasks.",
+            components: [finReactBtn]
+        })
+    }
 })
 
 client.on("interactionCreate", async (interaction) => {
@@ -236,7 +321,7 @@ client.on("interactionCreate", async (interaction) => {
             ephemeral: true
         })
     }else if(interaction.customId == 'assignTask'){
-        
+
     }
 })
 
