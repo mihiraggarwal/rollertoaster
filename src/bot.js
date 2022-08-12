@@ -16,10 +16,15 @@ const client = new Client({
     ],
 });
 
+
 const emojis = ['🔴','🟠','🟡','🟢','🔵','🟣','🟤','⚫','⚪','🟥','🟧','🟨','🟩','🟦','🟪','🟫','⬛','⬜','🔶','🔷']
 let assign = {}
 let selection = []
 let reactmsg = ''
+let taskBtnState = false
+let tasks = []
+let count = 0
+let taskMsg = ''
 
 const embedDescription = (roles) => {
     const start = `Here are the roles present in the server. You may choose all the ones you wish to assign tasks to\
@@ -46,26 +51,64 @@ const finReactBtn = new ActionRowBuilder()
 
 client.on("ready", () => {
     console.log(`Logged in as ${client.user.tag}!`);
+    client.channels
 });
 
 client.on('messageCreate', (message)=>{
-    const roles = message.guild.roles.cache.map(role => role.name)
-    const desc = embedDescription(roles)
-    if(message.mentions.has(client.user.id)){
-        message.channel.send({ embeds: [
-            new EmbedBuilder()
-            .setColor(0x0099FF)
-            .setTitle('Rollertoaster')
-            .setDescription(desc)
-        ] }).then(eMessage => {
-                emojis.slice(0, roles.length).forEach(emoji => eMessage.react(emoji))
-                reactmsg = eMessage
+    if(taskBtnState){
+        const taskRow = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId("confirmTask")
+                .setLabel("Confirm")
+                .setStyle(ButtonStyle.Primary)
+        ).addComponents(
+            new ButtonBuilder()
+                .setCustomId("resetTask")
+                .setLabel("Reset")
+                .setStyle(ButtonStyle.Secondary)
+        )
+
+        tasks.push({
+            index : count + 1,
+            content : message.content,
         })
-        message.channel.send({
-            content: "Once you have selected the roles, you may begin adding the tasks.",
-            components: [finReactBtn]
+        
+        count++
+        message.channel.messages.fetch(taskMsg)
+        .then(msg => {
+            msg.edit({
+                embeds : [
+                new EmbedBuilder()
+                    .setColor(0x0099FF)
+                    .setTitle('Rollertoaster')
+                    .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks.'),
+                    new EmbedBuilder()
+                    .setColor(0x0099FF)
+                    .setTitle('Rollertoaster')
+                    .setDescription(`**Your Tasks**\n${tasks.map(task => `${task.index}. ${task.content}`).join('\n')}`),
+                ],
+                components : [taskRow],
+            })
+            
         })
-    }
+    }else if(message.mentions.has(client.user.id)){
+            const roles = message.guild.roles.cache.map(role => role.name)
+            const desc = embedDescription(roles)
+            message.channel.send({ embeds: [
+                new EmbedBuilder()
+                .setColor(0x0099FF)
+                .setTitle('Rollertoaster')
+                .setDescription(desc)
+            ] }).then(eMessage => {
+                    emojis.slice(0, roles.length).forEach(emoji => eMessage.react(emoji))
+                    reactmsg = eMessage
+            })
+            message.channel.send({
+                content: "Once you have selected the roles, you may begin adding the tasks.",
+                components: [finReactBtn]
+            })
+        }
 })
 
 client.on("interactionCreate", async (interaction) => {
@@ -85,6 +128,76 @@ client.on("interactionCreate", async (interaction) => {
             .setTitle('Rollertoaster')
             .setDescription('Roles saved')
         ] }).then(msg.reactions.removeAll())
+
+        interaction.reply({
+            embeds: [
+                new EmbedBuilder()
+                .setColor(0x0099FF)
+                .setTitle('Rollertoaster')
+                .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks.'),
+                new EmbedBuilder()
+                .setColor(0x0099FF)
+                .setTitle('Rollertoaster')
+                .setDescription(`**Your Tasks**`)
+            ]
+        }).then(() => {
+            interaction.fetchReply()
+            .then(reply => {
+                taskMsg = reply.id
+                taskBtnState = true
+            })
+        })
+    }else if(interaction.customId == 'confirmTask'){
+        taskBtnState = false
+        interaction.channel.messages.fetch(taskMsg)
+        .then(msg => {
+            msg.edit({
+                embeds : [
+                new EmbedBuilder()
+                    .setColor(0x0099FF)
+                    .setTitle('Rollertoaster')
+                    .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks or Reset to reset the task list.'),
+                    new EmbedBuilder()
+                    .setColor(0x0099FF)
+                    .setTitle('Rollertoaster')
+                    .setDescription(`**Your Tasks**\n${tasks.map(task => `${task.index}. ${task.content}`).join('\n')}`),
+                ],
+                components : [],
+            })
+            .then(() => {
+                tasks = []
+                count = 0
+                interaction.reply({
+                    content: 'Tasks saved!',
+                    ephemeral: true
+                })
+            })
+            
+        })
+    }else if(interaction.customId == 'resetTask'){
+        count = 0
+        interaction.channel.messages.fetch(taskMsg)
+        .then(msg => {
+            msg.edit({
+                embeds : [
+                new EmbedBuilder()
+                    .setColor(0x0099FF)
+                    .setTitle('Rollertoaster')
+                    .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks.'),
+                    new EmbedBuilder()
+                    .setColor(0x0099FF)
+                    .setTitle('Rollertoaster')
+                    .setDescription(`**Your Tasks**\n${tasks.map(task => `${task.index}. ${task.content}`).join('\n')}`),
+                ]
+            })
+            
+        })
+        interaction.channel.bulkDelete(tasks.length)
+        tasks = []
+        interaction.reply({
+            content: 'Tasks reset!',
+            ephemeral: true
+        })
     }
 })
 
