@@ -26,9 +26,9 @@ const client = new Client({
     ],
 });
 
-
 const emojis = ['🔴','🟠','🟡','🟢','🔵','🟣','🟤','⚫','⚪','🟥','🟧','🟨','🟩','🟦','🟪','🟫','⬛','⬜','🔶','🔷']
 let assign = {}
+let assign2 = {}
 let selection = []
 let reactmsg = ''
 let taskBtnState = false
@@ -37,6 +37,7 @@ let count = 0
 let taskMsg = ''
 let assignIndex = 0
 let verifyState = false
+let finalAssignment = {}
 
 const embedRolesDescription = (roles) => {
     const start = `Here are the roles present in the server. You may choose all the ones you wish to assign tasks to\
@@ -54,6 +55,7 @@ const embedRolesDescription = (roles) => {
 }
 
 const embedTaskAssignment = () => {
+    assign2 = {}
     const start = `Here are the tasks you have created. You may choose all the ones you wish to assign to **${selection[assignIndex]}**\n\n\
     **Tasks**\n\n\
     \
@@ -61,10 +63,9 @@ const embedTaskAssignment = () => {
     let end = ''
     for (i = 0; i < tasks.length; i++) {
         end += `${emojis[i]} : ${tasks[i].content}\n`
-        assign[emojis[i]] = tasks[i]
+        assign2[emojis[i]] = tasks[i].content
     }
     let final = start + end
-    assignIndex++
     return final
 }
 
@@ -80,7 +81,8 @@ client.on("ready", (resp) => {
     console.log(`Logged in as ${client.user.tag}!`);
 });
 
-client.on('messageCreate', (message)=>{
+client.on('messageCreate', (message) => {
+    
     if(taskBtnState){
         const taskRow = new ActionRowBuilder()
         .addComponents(
@@ -194,7 +196,8 @@ client.on('messageCreate', (message)=>{
         }).then(() => {
             verifyState = true
         })
-    }else if(message.mentions.has(client.user.id)){
+    }
+    else if(message.mentions.has(client.user.id)) {
         const roles = message.guild.roles.cache.map(role => role.name)
         const desc = embedRolesDescription(roles)
         message.channel.send({ embeds: [
@@ -250,7 +253,9 @@ client.on("interactionCreate", async (interaction) => {
                 taskBtnState = true
             })
         })
-    }else if(interaction.customId == 'confirmTask'){
+    }
+    
+    else if(interaction.customId == 'confirmTask') {
         taskBtnState = false
         interaction.channel.messages.fetch(taskMsg)
         .then(msg => {
@@ -273,7 +278,6 @@ client.on("interactionCreate", async (interaction) => {
                     ephemeral: true
                 })
                 const desc = embedTaskAssignment()
-                console.log(desc)
                 interaction.channel.send({
                     embeds: [
                         new EmbedBuilder()
@@ -292,11 +296,14 @@ client.on("interactionCreate", async (interaction) => {
                     ]
                 }).then(message => {
                     reactmsg = message
+                    emojis.slice(0, tasks.length).forEach(emoji => message.react(emoji))
                 })
             })
             
         })
-    }else if(interaction.customId == 'resetTask'){
+    }
+    
+    else if(interaction.customId == 'resetTask') {
         count = 0
         interaction.channel.messages.fetch(taskMsg)
         .then(msg => {
@@ -320,8 +327,107 @@ client.on("interactionCreate", async (interaction) => {
             content: 'Tasks reset!',
             ephemeral: true
         })
-    }else if(interaction.customId == 'assignTask'){
+    }
+    
+    else if(interaction.customId == 'assignTask') {
+        const msg = await reactmsg.fetch()
+        const reacts = await msg.reactions.cache
+        finalAssignment[selection[assignIndex]] = []
+        reacts.forEach(emoji => {
+            if (emoji.count > 1) {
+                finalAssignment[selection[assignIndex]].push(assign2[emoji._emoji.name])
+            }
+        })
+        assignIndex++
+        msg.edit({
+            components: []
+        })
 
+        if (assignIndex < selection.length) {
+            const desc = embedTaskAssignment()
+            interaction.channel.send({
+                embeds: [
+                    new EmbedBuilder()
+                    .setColor(0x0099FF)
+                    .setTitle('Rollertoaster')
+                    .setDescription(desc)
+                ],
+                components: [
+                    new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId("assignTask")
+                            .setLabel("Assign")
+                            .setStyle(ButtonStyle.Success)
+                    )
+                ]
+            }).then(message => {
+                reactmsg = message
+                emojis.slice(0, tasks.length).forEach(emoji => message.react(emoji))
+            })
+        }
+        else {
+            const channel = interaction.client.channels.cache.find(channel => channel.name === "announcements")
+            interaction.channel.send({
+                content: `Tasks have been assigned to all roles. Press the button below to announce all tasks in <#${channel.id}>.`,
+                components: [
+                    new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId("announceTask")
+                            .setLabel("Announce")
+                            .setStyle(ButtonStyle.Primary)
+                    )
+                ]
+            })
+        }
+    }
+
+    else if (interaction.customId == 'announceTask') {
+        const channel = interaction.client.channels.cache.find(channel => channel.name === "announcements")
+        const roles = interaction.guild.roles.cache
+        for (const [key, value] of Object.entries(finalAssignment)) {
+            const croll = roles.filter(roll => roll.name == key)
+            const id = croll.map(roll => roll.id)
+            value.forEach(task => {
+                channel.send({
+                    content: `<@&${id}> ${task}`,
+                    components: [
+                        new ActionRowBuilder()
+                        .addComponents(
+                            new ButtonBuilder()
+                                .setCustomId("claimTask")
+                                .setLabel("Claim")
+                                .setStyle(ButtonStyle.Primary)
+                        )
+                    ]
+                }).then(message => reactmsg = message)
+            })
+        }
+        interaction.reply({
+            content: 'Tasks announced!',
+            ephemeral: true
+        })
+    }
+
+    else if (interaction.customId == 'claimTask') {
+        const msg = await interaction.message.fetch()
+        msg.edit({
+            components : [
+                new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId("claimTask")
+                        .setLabel("Claimed")
+                        .setStyle(ButtonStyle.Primary)
+                        .setDisabled(true)
+                )
+            ]
+        })
+        interaction.reply({
+            content: 'Task claimed!',
+            ephemeral: true
+        })
     }
 })
 
