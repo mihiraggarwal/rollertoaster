@@ -6,12 +6,14 @@ const {
     ButtonBuilder,
     ButtonStyle,
     EmbedBuilder,
+    PermissionsBitField,
 } = require("discord.js");
 const mongoose = require("mongoose");
 const Servers = require("../models/Servers");
 const Task = require("../models/Task");
 const User = require("../models/User");
 const table = require("table");
+const fs = require("fs");
 
 
 mongoose.connect(process.env.DB_URI,{ 
@@ -89,68 +91,77 @@ client.on("ready", (resp) => {
 });
 
 client.on('messageCreate', (message) => {
-    
     if(message.mentions.has(client.user.id) && message.mentions.everyone == false){
-        assign = {}
-        assign2 = {}
-        selection = []
-        reactmsg = ''
-        taskBtnState = false
-        pointState = false
-        pointInCounter = 0
-        tasks = []
-        count = 0
-        taskMsg = ''
-        assignIndex = 0
-        verifyState = false
-        finalAssignment = {}
-        message.channel.send({
-            embeds : [
-                new EmbedBuilder()
-                .setColor(0x0099FF)
-                .setTitle('Rollertoaster')
-                .setDescription(`Hello, I am Rollertoaster. I am here to help you manage your tasks.\n\n\
-                **Please select one of the options below**`),
-            ],
-            components : [
-                new ActionRowBuilder()
-                    .addComponents(
-                        new ButtonBuilder()
-                            .setCustomId("authMenu")
-                            .setLabel("Authenticate")
-                            .setStyle(ButtonStyle.Primary)
-                    ).addComponents(
-                        new ButtonBuilder()
-                            .setCustomId("assignMenu")
-                            .setLabel("Assign")
-                            .setStyle(ButtonStyle.Primary)
-                    ).addComponents(
-                        new ButtonBuilder()
-                            .setCustomId("verifyMenu")
-                            .setLabel("Verify")
-                            .setStyle(ButtonStyle.Primary)
-                    ),
-                new ActionRowBuilder()
-                    .addComponents(
-                        new ButtonBuilder()
-                            .setCustomId("leaderboardMenu")
-                            .setLabel("Leaderboard")
-                            .setStyle(ButtonStyle.Primary)
-                    )
-                    .addComponents(
-                        new ButtonBuilder()
-                            .setCustomId("statusMenu")
-                            .setLabel("Status")
-                            .setStyle(ButtonStyle.Primary)
-                    )
-                    .addComponents(
-                        new ButtonBuilder()
-                            .setCustomId("userMenu")
-                            .setLabel("User")
-                            .setStyle(ButtonStyle.Primary)
-                    )
-            ]
-        })
+        if(message.member.permissions.has(PermissionsBitField.Flags.Administrator, true)){
+            assign = {}
+            assign2 = {}
+            selection = []
+            reactmsg = ''
+            taskBtnState = false
+            pointState = false
+            pointInCounter = 0
+            tasks = []
+            count = 0
+            taskMsg = ''
+            assignIndex = 0
+            verifyState = false
+            finalAssignment = {}
+            message.channel.send({
+                embeds : [
+                    new EmbedBuilder()
+                    .setColor(0x0099FF)
+                    .setTitle('Rollertoaster')
+                    .setDescription(`Hello, I am Rollertoaster. I am here to help you manage your tasks.\n\n\
+                    **Please select one of the options below**`),
+                ],
+                components : [
+                    new ActionRowBuilder()
+                        .addComponents(
+                            new ButtonBuilder()
+                                .setCustomId("authMenu")
+                                .setLabel("Authenticate")
+                                .setStyle(ButtonStyle.Primary)
+                        ).addComponents(
+                            new ButtonBuilder()
+                                .setCustomId("assignMenu")
+                                .setLabel("Assign")
+                                .setStyle(ButtonStyle.Primary)
+                        ).addComponents(
+                            new ButtonBuilder()
+                                .setCustomId("verifyMenu")
+                                .setLabel("Verify")
+                                .setStyle(ButtonStyle.Primary)
+                        )
+                        .addComponents(
+                            new ButtonBuilder()
+                                .setCustomId("statusMenu")
+                                .setLabel("Status")
+                                .setStyle(ButtonStyle.Primary)
+                        ),
+                    new ActionRowBuilder()
+                        .addComponents(
+                            new ButtonBuilder()
+                                .setCustomId("leaderboardMenu")
+                                .setLabel("Leaderboard")
+                                .setStyle(ButtonStyle.Primary)
+                        )
+                        .addComponents(
+                            new ButtonBuilder()
+                                .setCustomId("userMenu")
+                                .setLabel("User")
+                                .setStyle(ButtonStyle.Primary)
+                        )
+                        .addComponents(
+                            new ButtonBuilder()
+                                .setCustomId("exitMenu")
+                                .setLabel("Exit")
+                                .setStyle(ButtonStyle.Danger)
+                        )        
+                ]
+            })
+        }else{
+            message.reply('You do not have permission to use this command.')
+        }
     }
     
     else if(taskBtnState){
@@ -401,6 +412,32 @@ client.on("interactionCreate", async (interaction) => {
                 
                 const newTable = "```\n" + table.table(data, config) + "```"
 
+                if(newTable.length > 2000){
+                    try{
+                        fs.writeFileSync('./src/leaderboard.txt', table.table(data, config))
+                        interaction.editReply({
+                            files : [{
+                                attachment : `${__dirname}/leaderboard.txt`,
+                                name: 'leaderboard.txt',
+                                description: 'Leaderboard',
+                            }]
+                        }).then(() => {
+                            try {
+                                fs.unlinkSync('./src/leaderboard.txt')
+                            }catch (error) {
+                                console.log(error)
+                            }
+                        })
+                    }catch(err){
+                        console.log(error)
+                        interaction.editReply(`Couldn't get leaderboard. Please try again.`)
+                    }
+                }else{
+                    interaction.editReply({
+                        content: newTable,
+                    })
+                }
+
                 interaction.editReply({
                     content: newTable,
                 })
@@ -437,7 +474,33 @@ client.on("interactionCreate", async (interaction) => {
                 
                 const newTable = "```\n" + table.table(data, config) + "```"
 
-                interaction.editReply(newTable)
+                if(newTable.length > 2000){
+                    try{
+                        fs.writeFileSync('./src/status.txt', table.table(data, config))
+                        interaction.editReply({
+                            files : [{
+                                attachment : `${__dirname}/status.txt`,
+                                name: 'status.txt',
+                                description: 'Status of tasks',
+                            }]
+                        }).then(() => {
+                            try {
+                                fs.unlinkSync('./src/status.txt')
+                            } catch (error) {
+                                console.log(error)
+                            }
+                        })
+                    }catch(err){
+                        console.log(error)
+                        interaction.editReply(`Couldn't get status. Please try again.`)
+                    }
+                }else{
+                    interaction.editReply({
+                        content: newTable,
+                    })
+                }
+
+                
             })
             .catch(err => console.log(err))
         })
@@ -448,6 +511,25 @@ client.on("interactionCreate", async (interaction) => {
             content: "Please mention the member(s) you wish to know about.",
         }).then(() => {
             userState = true
+        })
+    }
+
+    else if(interaction.customId == 'exitMenu'){
+        taskBtnState = false
+        interaction.reply('Thankyou for using Rollertoaster :wink:')
+        .then(() => {
+            assign = {}
+            assign2 = {}
+            selection = []
+            reactmsg = ''
+            pointState = false
+            pointInCounter = 0
+            tasks = []
+            count = 0
+            taskMsg = ''
+            assignIndex = 0
+            verifyState = false
+            finalAssignment = {}
         })
     }
 
