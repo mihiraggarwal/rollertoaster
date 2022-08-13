@@ -10,6 +10,7 @@ const {
 const mongoose = require("mongoose");
 const Servers = require("../models/Servers");
 const Task = require("../models/Task");
+const User = require("../models/User");
 const table = require("table");
 
 mongoose.connect(process.env.DB_URI,{ 
@@ -191,7 +192,47 @@ client.on('messageCreate', (message) => {
         .catch(err => console.log(err))
         
         verifyState = false
-    }else if(message.mentions.has(client.user.id) && message.content.includes("authenticate")){
+    }
+    
+    else if (message.mentions.has(client.user.id) && message.content.includes("user")) {
+        let members = message.mentions.members.map(member => `${member.user.username}#${member.user.discriminator}`)
+        let avatarUrls = message.mentions.members.map(member => `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.jpeg`)
+        members = members.slice(1,)
+        avatarUrls = avatarUrls.slice(1,)
+        members.forEach(member => {
+            User.findOne({username: member})
+            .then(doc => {
+                try {
+                    let ctask = ''
+                    Task.findOne({taskId: doc.currentTask})
+                    .then(tdoc=>{
+                        try {
+                            ctask = tdoc.name
+                        } catch (e) {
+                            ctask = "None"
+                        }
+                    })
+                    .then(_ => {
+                        message.channel.send({
+                            embeds: [new EmbedBuilder()
+                            .setColor(0x0099FF)
+                            .setTitle(doc.username)
+                            .addFields(
+                                {name: "Points", value: `${doc.points}`},
+                                {name: "Current task", value: `${ctask}`},
+                                {name: "Completed tasks", value: `${doc.tasksCompleted}`}
+                            )
+                            .setThumbnail(`${avatarUrls[members.indexOf(member)]}`)
+                            ] })
+                })
+                    } catch (e) {
+                        message.channel.send("User not found")
+                    }
+                }) 
+        })
+    }
+    
+    else if (message.mentions.has(client.user.id) && message.content.includes("authenticate")) {
         Servers.findOne({serverId : message.guild.id})
         .then(doc => {
             if(doc){

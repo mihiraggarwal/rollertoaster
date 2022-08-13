@@ -9,8 +9,28 @@ const TaskSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
+    taskId: {
+        type: String,
+        required: true,
+    },
     currentUser: {
         type: String
+    },
+    status: {
+        type: String,
+        required: true,
+    },
+    serverName: {
+        type: String,
+        required: true,
+    },
+    serverId: {
+        type: String,
+        required: true,
+    },
+    date: {
+        type: Date,
+        default: new Date,
     }
 })
 
