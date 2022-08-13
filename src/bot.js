@@ -702,30 +702,28 @@ client.on("interactionCreate", async (interaction) => {
         const channel = interaction.client.channels.cache.find(channel => channel.name === "announcements")
         const roles = interaction.guild.roles.cache
         for (const [key, value] of Object.entries(finalAssignment)) {
-            console.log('key', key)
-
             ////////////////////////////////
-            let sContent = []
+            let sContent = ""
             const croll = roles.filter(roll => {
-                console.log('roll', roll)
                 if (roll.name.startsWith('@')) {
-                    console.log('s', roll.name)
-                    sContent.push('@everyone')
+                    if (roll.name.substring(1, roll.length) == key) {
+                        sContent = '@everyone'
+                    }
                     return roll.name.substring(1, roll.length) == key
                 } else {
-                    console.log('t', roll.name)
-                    sContent.push('<@&')
+                    if (roll.name == key) {
+                        sContent = '<@&'
+                    }
                     return roll.name == key
                 }
             })
             const id = croll.map(roll => roll.id)
             value.forEach(task => {
-                console.log(sContent)
                 let finalContent = ''
-                if (sContent[Object.keys(finalAssignment).indexOf(key)].startsWith('@')) {
-                    finalContent = `${sContent[Object.keys(finalAssignment).indexOf(key)]} ${task.taskName}\nPoints: ${task.taskPoints}`
+                if (sContent.startsWith('@')) {
+                    finalContent = `${sContent} ${task.taskName}\nPoints: ${task.taskPoints}`
                 } else {
-                    finalContent = `${sContent[Object.keys(finalAssignment).indexOf(key)]}${id}> ${task.taskName}\nPoints: ${task.taskPoints}`
+                    finalContent = `${sContent}${id}> ${task.taskName}\nPoints: ${task.taskPoints}`
                 }
                 channel.send({
                     content: finalContent,
@@ -743,6 +741,7 @@ client.on("interactionCreate", async (interaction) => {
                     newTask = new Task({
                         name: task.taskName,
                         points: task.taskPoints,
+                        role: key,
                         taskId: message.id,
                         status: 'unclaimed',
                         serverName: interaction.guild.name,
@@ -776,70 +775,79 @@ client.on("interactionCreate", async (interaction) => {
 
     else if (interaction.customId == 'claimTask') {
         const msg = await interaction.message.fetch()
-        msg.edit({
-            components : [
-                new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId("claimTask")
-                        .setLabel("Claimed")
-                        .setStyle(ButtonStyle.Primary)
-                        .setDisabled(true)
-                )
-            ]
-        })
-        
-        User.findOne({username: `${interaction.user.username}#${interaction.user.discriminator}`, serverId: interaction.guild.id})
-        .then(user => {
-            if(user){
-                user.currentTask = msg.id
-                user.save()
-            }else{
-                const newUser = new User({
-                    username: `${interaction.user.username}#${interaction.user.discriminator}`,
-                    points: 0,
-                    tasksCompleted: 0,
-                    currentTask: msg.id,
-                    serverName: interaction.guild.name,
-                    serverId: interaction.guild.id,
-                })
-                newUser.save()
-            }
 
-            Task.findOne({taskId: msg.id, serverId: interaction.guild.id})
-            .then((task)=>{
+        Task.findOne({taskId: msg.id, serverId: interaction.guild.id})
+        .then((task)=>{
+
+            if(interaction.member.roles.cache.find(role => role.name == task.role) != undefined){
                 task.currentUser = `${interaction.user.username}#${interaction.user.discriminator}`
                 task.status = 'claimed'
                 task.save()
-            })
-            .catch(err => console.log(err))
 
-            Servers.findOne({serverId: interaction.guild.id})
-            .then(server => {
-                if(server.memberInfo != undefined){
-                    server.memberInfo[`${interaction.user.username}#${interaction.user.discriminator}`] = {
-                        points: 0,
-                        tasksCompleted: 0,
-                    }
-                }else{
-                    server.memberInfo = {
-                        [`${interaction.user.username}#${interaction.user.discriminator}`]: {
+                User.findOne({username: `${interaction.user.username}#${interaction.user.discriminator}`, serverId: interaction.guild.id})
+                .then(user => {
+                    if(user){
+                        user.currentTask = msg.id
+                        user.save()
+                    }else{
+                        const newUser = new User({
+                            username: `${interaction.user.username}#${interaction.user.discriminator}`,
                             points: 0,
                             tasksCompleted: 0,
-                        }
+                            currentTask: msg.id,
+                            serverName: interaction.guild.name,
+                            serverId: interaction.guild.id,
+                        })
+                        newUser.save()
                     }
-                }
 
-                server.markModified('memberInfo')
-                server.save()
-                .then(()=>{
-                    interaction.reply({
-                        content: 'Task claimed!',
-                        ephemeral: true
+                    Servers.findOne({serverId: interaction.guild.id})
+                    .then(server => {
+                        if(server.memberInfo != undefined){
+                            server.memberInfo[`${interaction.user.username}#${interaction.user.discriminator}`] = {
+                                points: 0,
+                                tasksCompleted: 0,
+                            }
+                        }else{
+                            server.memberInfo = {
+                                [`${interaction.user.username}#${interaction.user.discriminator}`]: {
+                                    points: 0,
+                                    tasksCompleted: 0,
+                                }
+                            }
+                        }
+
+                        server.markModified('memberInfo')
+                        server.save()
+                        .then(()=>{
+                            msg.edit({
+                                components : [
+                                    new ActionRowBuilder()
+                                    .addComponents(
+                                        new ButtonBuilder()
+                                            .setCustomId("claimTask")
+                                            .setLabel("Claimed")
+                                            .setStyle(ButtonStyle.Primary)
+                                            .setDisabled(true)
+                                    )
+                                ]
+                            })
+                            interaction.reply({
+                                content: 'Task claimed!',
+                                ephemeral: true
+                            })
+                        })
                     })
+                    .catch(err => console.log(err))
                 })
-            })
-            .catch(err => console.log(err))
+                .catch(err => console.log(err))
+
+            }else{
+                interaction.reply({
+                    content: 'You do not have the required role to claim this task!',
+                    ephemeral: true
+                })
+            }
         })
         .catch(err => console.log(err))
     }

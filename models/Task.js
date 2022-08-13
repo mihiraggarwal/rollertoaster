@@ -9,6 +9,10 @@ const TaskSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
+    role: {
+        type: String,
+        required: true,
+    },
     taskId: {
         type: String,
         required: true,
