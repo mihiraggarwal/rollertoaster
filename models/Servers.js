@@ -11,6 +11,8 @@ const ServerSchema = new mongoose.Schema({
     },
     memberInfo: {
         type: Object,
+        required: true,
+        default: {},
     },
     date: {
         type: Date,

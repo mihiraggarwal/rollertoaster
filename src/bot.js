@@ -10,7 +10,9 @@ const {
 const mongoose = require("mongoose");
 const Servers = require("../models/Servers");
 const Task = require("../models/Task");
+const User = require("../models/User");
 const table = require("table");
+
 
 mongoose.connect(process.env.DB_URI,{ 
     useNewUrlParser: true, 
@@ -48,17 +50,18 @@ const embedRolesDescription = (roles) => {
     **Roles**\n\n\
     \
     `
-    let end = ''
+    let end = 'Once you have selected the roles, you may begin adding the tasks.'
+
+    let mid = ''
     for (i = 0; i < roles.length; i++) {
-        end += `${emojis[i]} : ${roles[i]}\n`
+        mid += `${emojis[i]} : ${roles[i]}\n`
         assign[emojis[i]] = roles[i]
     }
-    let final = start + end
+    let final = start + mid + end
     return final
 }
 
 const embedTaskAssignment = () => {
-    assign2 = {}
     const start = `Here are the tasks you have created. You may choose all the ones you wish to assign to **${selection[assignIndex]}**\n\n\
     **Tasks**\n\n\
     \
@@ -66,7 +69,7 @@ const embedTaskAssignment = () => {
     let end = ''
     for (i = 0; i < tasks.length; i++) {
         end += `${emojis[i]} : ${tasks[i].content}\n`
-        assign2[emojis[i]] = tasks[i].content
+        assign2[emojis[i]] = tasks[i]
     }
     let final = start + end
     return final
@@ -113,7 +116,7 @@ client.on('messageCreate', (message) => {
                 new EmbedBuilder()
                     .setColor(0x0099FF)
                     .setTitle('Rollertoaster')
-                    .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks.'),
+                    .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks or Reset to reset the task list.'),
                     new EmbedBuilder()
                     .setColor(0x0099FF)
                     .setTitle('Rollertoaster')
@@ -126,21 +129,13 @@ client.on('messageCreate', (message) => {
     }
 
     else if (pointState) {
-        newTask = new Task({
-            name : tasks[pointInCounter].content,
-            points : message.content,
-        })
-
-        newTask.save()
-        .then()
-        .catch(err => console.log(err))
-        
+        tasks[pointInCounter].points = message.content
         pointInCounter++
         pointState = false
 
         if (pointInCounter < tasks.length) {
             message.channel.send({content: `Please enter the number of points for task: ${tasks[pointInCounter].content}`})
-            .then(result => pointState = true)
+            .then(() => pointState = true)
         } 
 
         else {
@@ -170,63 +165,157 @@ client.on('messageCreate', (message) => {
     }
     
     else if(verifyState){
-        const members = message.mentions.members.map(member => member.user.username)
-        Servers.findOne({serverId : message.guild.id})
-        .then(doc => {
-            for(i = 0; i < members.length; i++) {
-               if(doc.memberInfo[members[i]] == undefined) {
-                   doc.memberInfo[members[i]] = 0
-               }else{
-                     doc.memberInfo[members[i]]++
-               }
-            }
+        const members = message.mentions.members.map(member => member.user.username+'#'+member.user.discriminator)
+        let verifyPoints = []
+        members.forEach(member => {
+            Task.findOne({currentUser: member, status: 'claimed'})
+            .then(task => {
+                verifyPoints.push(task.points)
+                task.status = 'completed'
+                task.save()
 
-            doc.markModified('memberInfo')
-            doc.save()
-            .then(()=>{
-                message.reply('Leaderboard Updated')
+                if (verifyPoints.length == members.length) {
+                    Servers.findOne({serverId : message.guild.id})
+                    .then(doc => {
+                        for(i = 0; i < members.length; i++) {
+                            doc.memberInfo[members[i]].points += verifyPoints[i]
+                            doc.memberInfo[members[i]].tasksCompleted += 1
+                        }
+
+                        doc.markModified('memberInfo')
+                        doc.save()
+                        .then(()=>{
+                            message.channel.send({
+                                content: 'Verified!'
+                            })
+
+                            members.forEach(member => {
+                                User.findOne({username : member})
+                                .then(doc => {
+                                    doc.points += verifyPoints[members.indexOf(member)]
+                                    doc.tasksCompleted += 1
+                                    doc.currentTask = ''
+                                    doc.save()
+                                })
+                            })
+                        })
+                        .catch(err => console.log(err))
+                    })
+                    .catch(err => console.log(err))
+                    
+                    verifyState = false
+                }
+
+
             })
             .catch(err => console.log(err))
         })
-        .catch(err => console.log(err))
-        
-        verifyState = false
-    }else if(message.mentions.has(client.user.id) && message.content.includes("authenticate")){
-        Servers.findOne({serverId : message.guild.id})
+    }else if(message.mentions.has(client.user.id)){
+        message.channel.send({
+            embeds : [
+                new EmbedBuilder()
+                .setColor(0x0099FF)
+                .setTitle('Rollertoaster')
+                .setDescription('Hello, I am Rollertoaster. I am here to help you manage your tasks.\n\n\\**Please select one of the options below**'),
+            ],
+            components : [
+                new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId("authMenu")
+                            .setLabel("Authenticate")
+                            .setStyle(ButtonStyle.Primary)
+                    ).addComponents(
+                        new ButtonBuilder()
+                            .setCustomId("assignMenu")
+                            .setLabel("Assign")
+                            .setStyle(ButtonStyle.Primary)
+                    ).addComponents(
+                        new ButtonBuilder()
+                            .setCustomId("verifyMenu")
+                            .setLabel("Verify")
+                            .setStyle(ButtonStyle.Primary)
+                    ).addComponents(
+                        new ButtonBuilder()
+                            .setCustomId("leaderboardMenu")
+                            .setLabel("Leaderboard")
+                            .setStyle(ButtonStyle.Primary)
+                    ).addComponents(
+                        new ButtonBuilder()
+                            .setCustomId("statusMenu")
+                            .setLabel("Status")
+                            .setStyle(ButtonStyle.Primary)
+                    )
+            ]
+        })
+    }
+})
+
+
+
+client.on("interactionCreate", async (interaction) => {
+    if (!interaction.isButton()) return;
+
+    if(interaction.customId == 'authMenu'){
+        Servers.findOne({serverId : interaction.guild.id})
         .then(doc => {
             if(doc){
-                message.channel.send('Your server is already authenticated.')
+                interaction.reply('Your server is already authenticated.')
             }else{
-                message.guild.members.fetch({force : true})
-                .then(memb => {
-                    const members = memb.map(member => member.user.username)
-                    const memberInfo = {}
-                    for(i = 0; i < members.length; i++) {
-                        memberInfo[members[i]] = 0
-                    }
-                    newServer = new Servers({
-                        serverId : message.guild.id,
-                        serverName : message.guild.name,
-                        memberInfo : memberInfo,
-                    })
-            
-                    newServer.save()
-                    .then(()=>{
-                        message.reply('You have been authenticated :thumbsup:')
-                    })
-                    .catch(err => console.log(err))
+                newServer = new Servers({
+                    serverId : interaction.guild.id,
+                    serverName : interaction.guild.name,
+                })
+        
+                newServer.save()
+                .then(()=>{
+                    interaction.reply('You have been authenticated :thumbsup:')
                 })
                 .catch(err => console.log(err))
             }
         })
         .catch(err => console.log(err))
-    }else if(message.mentions.has(client.user.id) && message.content.includes("leaderboard")){
-        Servers.findOne({serverId : message.guild.id})
+    }
+
+    else if(interaction.customId == 'assignMenu'){
+        const roles = interaction.guild.roles.cache.map(role => role.name)
+        const desc = embedRolesDescription(roles)
+        interaction.reply({ 
+            embeds: [
+                new EmbedBuilder()
+                .setColor(0x0099FF)
+                .setTitle('Rollertoaster')
+                .setDescription(desc)
+            ],
+            components: [finReactBtn],
+        }).then(() => {
+                let replyMsg = interaction.channel.lastMessage
+                emojis.slice(0, roles.length).forEach(emoji => replyMsg.react(emoji))
+                reactmsg = replyMsg
+        })
+    }
+
+    else if(interaction.customId == 'verifyMenu'){
+        interaction.reply({
+            content: "Please mention the members you wish to verify.",
+        }).then(() => {
+            verifyState = true
+        })
+    }
+
+    else if(interaction.customId == 'leaderboardMenu'){
+        Servers.findOne({serverId : interaction.guild.id})
         .then(doc => {
-            let data = [['Users', 'Points']]
+            let data = []
             for(member in doc.memberInfo){
-                data.push([member, doc.memberInfo[member].toString()])
+                data.push([member, doc.memberInfo[member].points.toString(), doc.memberInfo[member].tasksCompleted.toString()])
             }
+
+            data.sort((a,b) => {
+                return b[1] - a[1]
+            })
+
+            data = [['Users', 'Points', 'Tasks Completed'], ...data]
 
             config = {
                 border: table.getBorderCharacters("ramac")
@@ -234,41 +323,46 @@ client.on('messageCreate', (message) => {
             
             const newTable = "```\n" + table.table(data, config) + "```"
 
-            message.reply({
+            interaction.reply({
                 content: newTable,
             })
         })
         .catch(err => console.log(err))
-    }else if(message.mentions.has(client.user.id) && message.content.includes("verify")){
-        message.channel.send({
-            content: "Please mention the members you wish to verify.",
-        }).then(() => {
-            verifyState = true
-        })
     }
-    else if(message.mentions.has(client.user.id)) {
-        const roles = message.guild.roles.cache.map(role => role.name)
-        const desc = embedRolesDescription(roles)
-        message.channel.send({ embeds: [
-            new EmbedBuilder()
-            .setColor(0x0099FF)
-            .setTitle('Rollertoaster')
-            .setDescription(desc)
-        ] }).then(eMessage => {
-                emojis.slice(0, roles.length).forEach(emoji => eMessage.react(emoji))
-                reactmsg = eMessage
+
+    else if(interaction.customId == 'statusMenu'){
+        Task.find({serverId : interaction.guild.id})
+        .then(tasks => {
+            let data = [['Task', 'Points', 'Status', 'User']]
+            tasks.forEach(task => {
+                let taskStatus = ''
+                let taskUser = ''
+                if(task.status == 'unclaimed'){
+                    taskStatus = 'Not Started'
+                    taskUser = 'None'
+                }else if(task.status == 'claimed'){
+                    taskStatus = 'In Progress'
+                    taskUser = task.currentUser
+                }else if(task.status == 'completed'){
+                    taskStatus = 'Completed'
+                    taskUser = task.currentUser
+                }
+
+                data.push([task.name, task.points, taskStatus, taskUser])
+            })
+
+            config = {
+                border: table.getBorderCharacters("ramac")
+            }
+            
+            const newTable = "```\n" + table.table(data, config) + "```"
+
+            interaction.reply(newTable)
         })
-        message.channel.send({
-            content: "Once you have selected the roles, you may begin adding the tasks.",
-            components: [finReactBtn]
-        })
+        .catch(err => console.log(err))
     }
-})
 
-client.on("interactionCreate", async (interaction) => {
-    if (!interaction.isButton()) return;
-
-    if (interaction.customId === "taskOn") {
+    else if (interaction.customId === "taskOn") {
         const msg = await reactmsg.fetch()
         const reacts = await msg.reactions.cache
         reacts.forEach(emoji => {
@@ -289,7 +383,7 @@ client.on("interactionCreate", async (interaction) => {
                 new EmbedBuilder()
                 .setColor(0x0099FF)
                 .setTitle('Rollertoaster')
-                .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks.'),
+                .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks or Reset to reset the task list.'),
                 new EmbedBuilder()
                 .setColor(0x0099FF)
                 .setTitle('Rollertoaster')
@@ -338,7 +432,7 @@ client.on("interactionCreate", async (interaction) => {
                 new EmbedBuilder()
                     .setColor(0x0099FF)
                     .setTitle('Rollertoaster')
-                    .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks.'),
+                    .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks or Reset to reset the task list.'),
                     new EmbedBuilder()
                     .setColor(0x0099FF)
                     .setTitle('Rollertoaster')
@@ -361,7 +455,10 @@ client.on("interactionCreate", async (interaction) => {
         finalAssignment[selection[assignIndex]] = []
         reacts.forEach(emoji => {
             if (emoji.count > 1) {
-                finalAssignment[selection[assignIndex]].push(assign2[emoji._emoji.name])
+                finalAssignment[selection[assignIndex]].push({
+                    taskName: assign2[emoji._emoji.name].content,
+                    taskPoints : assign2[emoji._emoji.name].points
+                })
             }
         })
         assignIndex++
@@ -417,7 +514,7 @@ client.on("interactionCreate", async (interaction) => {
             const id = croll.map(roll => roll.id)
             value.forEach(task => {
                 channel.send({
-                    content: `<@&${id}> ${task}`,
+                    content: `<@&${id}> ${task.taskName}\nPoints: ${task.taskPoints}`,
                     components: [
                         new ActionRowBuilder()
                         .addComponents(
@@ -427,13 +524,41 @@ client.on("interactionCreate", async (interaction) => {
                                 .setStyle(ButtonStyle.Primary)
                         )
                     ]
-                }).then(message => reactmsg = message)
+                }).then(message => {
+                    reactmsg = message
+                    newTask = new Task({
+                        name: task.taskName,
+                        points: task.taskPoints,
+                        taskId: message.id,
+                        status: 'unclaimed',
+                        serverName: interaction.guild.name,
+                        serverId: interaction.guild.id,
+                    })
+
+                    newTask.save()
+                    .then(() => {
+                        interaction.reply({
+                            content: 'Tasks announced!',
+                            ephemeral: true
+                        })
+                        assign = {}
+                        assign2 = {}
+                        selection = []
+                        reactmsg = ''
+                        taskBtnState = false
+                        pointState = false
+                        pointInCounter = 0
+                        tasks = []
+                        count = 0
+                        taskMsg = ''
+                        assignIndex = 0
+                        verifyState = false
+                        finalAssignment = {}
+                    })
+                    .catch(err => console.log(err))
+                })
             })
         }
-        interaction.reply({
-            content: 'Tasks announced!',
-            ephemeral: true
-        })
     }
 
     else if (interaction.customId == 'claimTask') {
@@ -450,10 +575,60 @@ client.on("interactionCreate", async (interaction) => {
                 )
             ]
         })
-        interaction.reply({
-            content: 'Task claimed!',
-            ephemeral: true
+        
+        User.findOne({username: `${interaction.user.username}#${interaction.user.discriminator}`})
+        .then(user => {
+            if(user){
+                user.currentTask = msg.id
+                user.save()
+            }else{
+                const newUser = new User({
+                    username: `${interaction.user.username}#${interaction.user.discriminator}`,
+                    points: 0,
+                    tasksCompleted: 0,
+                    currentTask: msg.id,
+                    serverName: interaction.guild.name,
+                    serverId: interaction.guild.id,
+                })
+                newUser.save()
+            }
+
+            Task.findOne({taskId: msg.id})
+            .then((task)=>{
+                task.currentUser = `${interaction.user.username}#${interaction.user.discriminator}`
+                task.status = 'claimed'
+                task.save()
+            })
+            .catch(err => console.log(err))
+
+            Servers.findOne({serverId: interaction.guild.id})
+            .then(server => {
+                if(server.memberInfo != undefined){
+                    server.memberInfo[`${interaction.user.username}#${interaction.user.discriminator}`] = {
+                        points: 0,
+                        tasksCompleted: 0,
+                    }
+                }else{
+                    server.memberInfo = {
+                        [`${interaction.user.username}#${interaction.user.discriminator}`]: {
+                            points: 0,
+                            tasksCompleted: 0,
+                        }
+                    }
+                }
+
+                server.markModified('memberInfo')
+                server.save()
+                .then(()=>{
+                    interaction.reply({
+                        content: 'Task claimed!',
+                        ephemeral: true
+                    })
+                })
+            })
+            .catch(err => console.log(err))
         })
+        .catch(err => console.log(err))
     }
 })
 
