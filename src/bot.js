@@ -9,6 +9,7 @@ const {
 } = require("discord.js");
 const mongoose = require("mongoose");
 const Servers = require("../models/Servers");
+const Task = require("../models/Task");
 const table = require("table");
 
 mongoose.connect(process.env.DB_URI,{ 
@@ -32,6 +33,8 @@ let assign2 = {}
 let selection = []
 let reactmsg = ''
 let taskBtnState = false
+let pointState = false
+let pointInCounter = 0
 let tasks = []
 let count = 0
 let taskMsg = ''
@@ -120,7 +123,53 @@ client.on('messageCreate', (message) => {
             })
             
         })
-    }else if(verifyState){
+    }
+
+    else if (pointState) {
+        newTask = new Task({
+            name : tasks[pointInCounter].content,
+            points : message.content,
+        })
+
+        newTask.save()
+        .then()
+        .catch(err => console.log(err))
+        
+        pointInCounter++
+        pointState = false
+
+        if (pointInCounter < tasks.length) {
+            message.channel.send({content: `Please enter the number of points for task: ${tasks[pointInCounter].content}`})
+            .then(result => pointState = true)
+        } 
+
+        else {
+            pointState = false
+            const desc = embedTaskAssignment()
+            message.channel.send({
+                embeds: [
+                    new EmbedBuilder()
+                    .setColor(0x0099FF)
+                    .setTitle('Rollertoaster')
+                    .setDescription(desc)
+                ],
+                components: [
+                    new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId("assignTask")
+                            .setLabel("Assign")
+                            .setStyle(ButtonStyle.Success)
+                    )
+                ]
+            }).then(msg => {
+                reactmsg = msg
+                emojis.slice(0, tasks.length).forEach(emoji => msg.react(emoji))
+            })
+        }
+    }
+    
+    else if(verifyState){
         const members = message.mentions.members.map(member => member.user.username)
         Servers.findOne({serverId : message.guild.id})
         .then(doc => {
@@ -274,32 +323,9 @@ client.on("interactionCreate", async (interaction) => {
             })
             .then(() => {
                 interaction.reply({
-                    content: 'Tasks saved!',
-                    ephemeral: true
-                })
-                const desc = embedTaskAssignment()
-                interaction.channel.send({
-                    embeds: [
-                        new EmbedBuilder()
-                        .setColor(0x0099FF)
-                        .setTitle('Rollertoaster')
-                        .setDescription(desc)
-                    ],
-                    components: [
-                        new ActionRowBuilder()
-                        .addComponents(
-                            new ButtonBuilder()
-                                .setCustomId("assignTask")
-                                .setLabel("Assign")
-                                .setStyle(ButtonStyle.Success)
-                        )
-                    ]
-                }).then(message => {
-                    reactmsg = message
-                    emojis.slice(0, tasks.length).forEach(emoji => message.react(emoji))
-                })
+                    content: `Please enter the number of points for task: ${tasks[0].content}`
+                }).then(msg => pointState = true)                
             })
-            
         })
     }
     
