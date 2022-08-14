@@ -23,6 +23,7 @@ mongoose.connect(process.env.DB_URI,{
 .catch(err => console.log(err))
 
 const client = new Client({
+    fetchAllMembers: true,
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
@@ -242,9 +243,9 @@ client.on('messageCreate', (message) => {
             pointState = false
             message.channel.send('Points must be numerical only. Please enter the correct value.').then(_ => 
                 pointState = true
-            )
+                )
+            }
         }
-    }
     
     else if(verifyState){
         const members = message.mentions.members.map(member => member.user.username+'#'+member.user.discriminator)
@@ -254,43 +255,78 @@ client.on('messageCreate', (message) => {
             .then(task => {
                 verifyPoints.push(task.points)
                 task.status = 'completed'
-                task.save()
-
-                if (verifyPoints.length == members.length) {
-                    Servers.findOne({serverId : message.guild.id})
-                    .then(doc => {
-                        for(i = 0; i < members.length; i++) {
-                            doc.memberInfo[members[i]].points += verifyPoints[i]
-                            doc.memberInfo[members[i]].tasksCompleted += 1
-                        }
-
-                        doc.markModified('memberInfo')
-                        doc.save()
-                        .then(()=>{
-                            message.channel.send({
-                                content: 'Verified!'
-                            })
-
-                            members.forEach(member => {
+                task.save().then(() => {
+                    if (verifyPoints.length == members.length) {
+                        Servers.findOne({serverId : message.guild.id})
+                        .then(doc => {
+                            for(i = 0; i < members.length; i++) {
+                                doc.memberInfo[members[i]].points += verifyPoints[i]
+                                doc.memberInfo[members[i]].tasksCompleted += 1
+                            }
+                            
+                            doc.markModified('memberInfo')
+                            doc.save()
+                            .then(async ()=>{
+                                message.channel.send({
+                                    content: 'Verified!'
+                                })
                                 User.findOne({username : member, serverId: message.guild.id})
                                 .then(doc => {
                                     doc.points += verifyPoints[members.indexOf(member)]
                                     doc.tasksCompleted += 1
                                     doc.currentTask = ''
-                                    doc.save()
+                                    doc.save().then((res) => {
+                                        if (parseInt((res.points/50)) > 0) {
+                                            const pts = 50*(parseInt(res.points/50))
+                                            const role = message.guild.roles.cache.find(role => role.name === `${pts}+ Points`)
+                                            message.guild.members.fetch().then(mmbr => {
+                                                mmbr = mmbr.find(m => `${m.user.username}#${m.user.discriminator}` == res.username)
+                                                if (!role) {
+                                                    message.guild.roles.create({
+                                                        name: `${pts}+ Points`,
+                                                        color: '#16e16e',
+                                                        permissions: [],
+                                                        hoist: true,
+                                                    }).then(rl => {
+                                                        mmbr.roles.add(rl)
+                                                        for (let i = 50; i < pts; i = i+50) {
+                                                            const removeRole = message.guild.roles.cache.find(role => role.name === `${i}+ Points`)
+                                                            if (removeRole) {
+                                                                mmbr.roles.remove(removeRole)
+                                                            }
+                                                        }
+                                                        let rolesArr = []
+                                                        message.guild.roles.fetch().then(rls => rls.reverse().forEach(r => {
+                                                            if (!Number.isNaN(parseInt(r.name))) {
+                                                                rolesArr.push({role: r.id, position: (parseInt(parseInt(r.name)/50))})
+
+                                                            }
+                                                            })).then(() => {
+                                                            message.guild.roles.setPositions(rolesArr)
+                                                            .then()
+                                                            .catch((err) => console.log(err))
+                                                        })
+                                                    })
+                                                } else {
+                                                    mmbr.roles.add(role)
+                                                    for (let i = 50; i < pts; i = i+50) {
+                                                        const removeRole = message.guild.roles.cache.find(role => role.name === `${i}+ Points`)
+                                                        if (removeRole) {
+                                                            mmbr.roles.remove(removeRole)
+                                                        }
+                                                    }
+                                                }
+                                            })
+                                        }
+                                    })
                                 })
-                            })
+                            }).catch(err => console.log(err))
                         })
-                        .catch(err => console.log(err))
-                    })
-                    .catch(err => console.log(err))
-                    
-                    verifyState = false
-                }
-
-
-            })
-            .catch(err => console.log(err))
+                            .catch(err => console.log(err))
+                            verifyState = false
+                    }
+                })
+            }).catch(err => console.log(err))
         })        
         verifyState = false
     }
