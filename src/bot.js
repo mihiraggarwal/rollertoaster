@@ -304,10 +304,13 @@ client.on('messageCreate', (message) => {
                                                                     rolesArr.push({role: r.id, position: (parseInt(parseInt(r.name)/50))})
 
                                                                 }
-                                                                })).then(() => {
+                                                            })).then(() => {
                                                                 message.guild.roles.setPositions(rolesArr)
                                                                 .then()
-                                                                .catch((err) => console.log(err))
+                                                                .catch((err) => message.channel.send({
+                                                                    content: "Please put the rollertoaster role higher in the hierarchy",
+                                                                    ephemeral: true
+                                                                }))
                                                             })
                                                         })
                                                     } else {
@@ -396,7 +399,7 @@ client.on("interactionCreate", async (interaction) => {
         
                 newServer.save()
                 .then(()=>{
-                    interaction.reply('You have been authenticated :thumbsup:')
+                    interaction.reply('You have been authenticated :thumbsup:. Make sure to add the rollertoaster role to the top of the role hierarchy.')
                 })
                 .catch(err => console.log(err))
             }
@@ -438,7 +441,7 @@ client.on("interactionCreate", async (interaction) => {
 
     else if(interaction.customId == 'verifyMenu'){
         interaction.reply({
-            content: "Please mention the members you wish to verify.",
+            content: "Please mention the member(s) you wish to verify.",
         }).then(() => {
             verifyState = true
         })
@@ -757,7 +760,6 @@ client.on("interactionCreate", async (interaction) => {
             const channel = interaction.client.channels.cache.find(channel => channel.name === "announcements")
             const roles = interaction.guild.roles.cache
             for (const [key, value] of Object.entries(finalAssignment)) {
-                ////////////////////////////////
                 let sContent = ""
                 const croll = roles.filter(roll => {
                     if (roll.name.startsWith('@')) {
