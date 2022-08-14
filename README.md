@@ -17,6 +17,10 @@ With the advent of the Coronavirus, most organisations have shifted their work t
 
 ## Demo
 
+https://user-images.githubusercontent.com/49950982/184540893-b347b39a-427d-4202-8d74-c566e81b4889.mp4
+
+[Youtube](https://www.youtube.com/watch?v=thldVxYg4HY)
+
 ## Getting started
 
 1. Clone the source code and install the dependencies.
