@@ -657,7 +657,7 @@ client.on("interactionCreate", async (interaction) => {
                 })
                 .then(() => {
                     interaction.reply({
-                        content: `Please enter the number of points for task: ${tasks[0].content}`
+                        content: `Please enter the number of points for task: **${tasks[0].content}**`
                     }).then(msg => pointState = true)                
                 })
             })
