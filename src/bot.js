@@ -33,6 +33,7 @@ const client = new Client({
 });
 
 const emojis = ['🔴','🟠','🟡','🟢','🔵','🟣','🟤','⚫','⚪','🟥','🟧','🟨','🟩','🟦','🟪','🟫','⬛','⬜','🔶','🔷']
+let botState = false
 let assign = {}
 let assign2 = {}
 let selection = []
@@ -94,6 +95,7 @@ client.on("ready", (resp) => {
 client.on('messageCreate', (message) => {
     if(message.mentions.has(client.user.id) && message.mentions.everyone == false){
         if(message.member.permissions.has(PermissionsBitField.Flags.Administrator, true)){
+            botState = true
             assign = {}
             assign2 = {}
             selection = []
@@ -211,7 +213,7 @@ client.on('messageCreate', (message) => {
             pointState = false
 
             if (pointInCounter < tasks.length) {
-                message.channel.send({content: `Please enter the number of points for task: ${tasks[pointInCounter].content}`})
+                message.channel.send({content: `Please enter the number of points for task: **${tasks[pointInCounter].content}**`})
                 .then(() => pointState = true)
             } 
 
@@ -253,79 +255,86 @@ client.on('messageCreate', (message) => {
         members.forEach(member => {
             Task.findOne({currentUser: member, status: 'claimed', serverId: message.guild.id})
             .then(task => {
-                verifyPoints.push(task.points)
-                task.status = 'completed'
-                task.save().then(() => {
-                    if (verifyPoints.length == members.length) {
-                        Servers.findOne({serverId : message.guild.id})
-                        .then(doc => {
-                            for(i = 0; i < members.length; i++) {
-                                doc.memberInfo[members[i]].points += verifyPoints[i]
-                                doc.memberInfo[members[i]].tasksCompleted += 1
-                            }
-                            
-                            doc.markModified('memberInfo')
-                            doc.save()
-                            .then(async ()=>{
-                                message.channel.send({
-                                    content: 'Verified!'
-                                })
-                                User.findOne({username : member, serverId: message.guild.id})
-                                .then(doc => {
-                                    doc.points += verifyPoints[members.indexOf(member)]
-                                    doc.tasksCompleted += 1
-                                    doc.currentTask = ''
-                                    doc.save().then((res) => {
-                                        if (parseInt((res.points/50)) > 0) {
-                                            const pts = 50*(parseInt(res.points/50))
-                                            const role = message.guild.roles.cache.find(role => role.name === `${pts}+ Points`)
-                                            message.guild.members.fetch().then(mmbr => {
-                                                mmbr = mmbr.find(m => `${m.user.username}#${m.user.discriminator}` == res.username)
-                                                if (!role) {
-                                                    message.guild.roles.create({
-                                                        name: `${pts}+ Points`,
-                                                        color: '#16e16e',
-                                                        permissions: [],
-                                                        hoist: true,
-                                                    }).then(rl => {
-                                                        mmbr.roles.add(rl)
+                if(task){
+                    verifyPoints.push(task.points)
+                    task.status = 'completed'
+                    task.save().then(() => {
+                        if (verifyPoints.length == members.length) {
+                            Servers.findOne({serverId : message.guild.id})
+                            .then(doc => {
+                                for(i = 0; i < members.length; i++) {
+                                    doc.memberInfo[members[i]].points += verifyPoints[i]
+                                    doc.memberInfo[members[i]].tasksCompleted += 1
+                                }
+                                
+                                doc.markModified('memberInfo')
+                                doc.save()
+                                .then(async ()=>{
+                                    message.channel.send({
+                                        content: 'Verified!'
+                                    })
+                                    User.findOne({username : member, serverId: message.guild.id})
+                                    .then(doc => {
+                                        doc.points += verifyPoints[members.indexOf(member)]
+                                        doc.tasksCompleted += 1
+                                        doc.currentTask = ''
+                                        doc.save().then((res) => {
+                                            if (parseInt((res.points/50)) > 0) {
+                                                const pts = 50*(parseInt(res.points/50))
+                                                const role = message.guild.roles.cache.find(role => role.name === `${pts}+ Points`)
+                                                message.guild.members.fetch().then(mmbr => {
+                                                    mmbr = mmbr.find(m => `${m.user.username}#${m.user.discriminator}` == res.username)
+                                                    if (!role) {
+                                                        message.guild.roles.create({
+                                                            name: `${pts}+ Points`,
+                                                            color: '#16e16e',
+                                                            permissions: [],
+                                                            hoist: true,
+                                                        }).then(rl => {
+                                                            mmbr.roles.add(rl)
+                                                            for (let i = 50; i < pts; i = i+50) {
+                                                                const removeRole = message.guild.roles.cache.find(role => role.name === `${i}+ Points`)
+                                                                if (removeRole) {
+                                                                    mmbr.roles.remove(removeRole)
+                                                                }
+                                                            }
+                                                            let rolesArr = []
+                                                            message.guild.roles.fetch().then(rls => rls.reverse().forEach(r => {
+                                                                if (!Number.isNaN(parseInt(r.name))) {
+                                                                    rolesArr.push({role: r.id, position: (parseInt(parseInt(r.name)/50))})
+
+                                                                }
+                                                                })).then(() => {
+                                                                message.guild.roles.setPositions(rolesArr)
+                                                                .then()
+                                                                .catch((err) => console.log(err))
+                                                            })
+                                                        })
+                                                    } else {
+                                                        mmbr.roles.add(role)
                                                         for (let i = 50; i < pts; i = i+50) {
                                                             const removeRole = message.guild.roles.cache.find(role => role.name === `${i}+ Points`)
                                                             if (removeRole) {
                                                                 mmbr.roles.remove(removeRole)
                                                             }
                                                         }
-                                                        let rolesArr = []
-                                                        message.guild.roles.fetch().then(rls => rls.reverse().forEach(r => {
-                                                            if (!Number.isNaN(parseInt(r.name))) {
-                                                                rolesArr.push({role: r.id, position: (parseInt(parseInt(r.name)/50))})
-
-                                                            }
-                                                            })).then(() => {
-                                                            message.guild.roles.setPositions(rolesArr)
-                                                            .then()
-                                                            .catch((err) => console.log(err))
-                                                        })
-                                                    })
-                                                } else {
-                                                    mmbr.roles.add(role)
-                                                    for (let i = 50; i < pts; i = i+50) {
-                                                        const removeRole = message.guild.roles.cache.find(role => role.name === `${i}+ Points`)
-                                                        if (removeRole) {
-                                                            mmbr.roles.remove(removeRole)
-                                                        }
                                                     }
-                                                }
-                                            })
-                                        }
+                                                })
+                                            }
+                                        })
                                     })
-                                })
-                            }).catch(err => console.log(err))
-                        })
-                            .catch(err => console.log(err))
-                            verifyState = false
-                    }
-                })
+                                }).catch(err => console.log(err))
+                            })
+                                .catch(err => console.log(err))
+                                verifyState = false
+                        }
+                    })   
+                }else{
+                    message.reply({
+                        content: `${member} has not claimed any task.`
+                    })
+                    verifyState = false
+                }
             }).catch(err => console.log(err))
         })        
         verifyState = false
@@ -396,27 +405,35 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     else if(interaction.customId == 'assignMenu'){
-        let roles = interaction.guild.roles.cache.map(role => role.name)
-        roles = roles.map(role => {
-            if (role.startsWith('@')){
-                return role.substring(1, role.length)
-            } 
-            return role
+        Servers.findOne({serverId : interaction.guild.id})
+        .then(server => {
+            if(server){
+                let roles = interaction.guild.roles.cache.map(role => role.name)
+                roles = roles.map(role => {
+                    if (role.startsWith('@')){
+                        return role.substring(1, role.length)
+                    } 
+                    return role
+                })
+                const desc = embedRolesDescription(roles)
+                interaction.reply({ 
+                    embeds: [
+                        new EmbedBuilder()
+                        .setColor(0x0099FF)
+                        .setTitle('Rollertoaster')
+                        .setDescription(desc)
+                    ],
+                    components: [finReactBtn],
+                }).then(() => {
+                        let replyMsg = interaction.channel.lastMessage
+                        emojis.slice(0, roles.length).forEach(emoji => replyMsg.react(emoji))
+                        reactmsg = replyMsg
+                })
+            }else{
+                interaction.reply('You need to authenticate your server first. This is a one time process.')
+            }
         })
-        const desc = embedRolesDescription(roles)
-        interaction.reply({ 
-            embeds: [
-                new EmbedBuilder()
-                .setColor(0x0099FF)
-                .setTitle('Rollertoaster')
-                .setDescription(desc)
-            ],
-            components: [finReactBtn],
-        }).then(() => {
-                let replyMsg = interaction.channel.lastMessage
-                emojis.slice(0, roles.length).forEach(emoji => replyMsg.react(emoji))
-                reactmsg = replyMsg
-        })
+        .catch(err => console.log(err))
     }
 
     else if(interaction.customId == 'verifyMenu'){
@@ -554,6 +571,7 @@ client.on("interactionCreate", async (interaction) => {
         taskBtnState = false
         interaction.reply('Thankyou for using Rollertoaster :wink:')
         .then(() => {
+            botState = false
             assign = {}
             assign2 = {}
             selection = []
@@ -569,323 +587,340 @@ client.on("interactionCreate", async (interaction) => {
         })
     }
 
-    else if (interaction.customId === "taskOn") {
-        const msg = await reactmsg.fetch()
-        const reacts = await msg.reactions.cache
-        let finalDesc = 'Roles saved\n\n'
-        let i = 1
-        reacts.forEach(emoji => {
-            if (emoji.count > 1) {
-                selection.push(assign[emoji._emoji.name])
-                finalDesc += `${i}. ${assign[emoji._emoji.name]}\n`
-                i++
-            }
-        })
-        if (selection.length < 1) {
-            interaction.reply({
-                content: "You must select atleast 1 role.",
-                ephemeral: true
+    if(botState){
+        if (interaction.customId === "taskOn") {
+            const msg = await reactmsg.fetch()
+            const reacts = await msg.reactions.cache
+            let finalDesc = 'Roles saved\n\n'
+            let i = 1
+            reacts.forEach(emoji => {
+                if (emoji.count > 1) {
+                    selection.push(assign[emoji._emoji.name])
+                    finalDesc += `${i}. ${assign[emoji._emoji.name]}\n`
+                    i++
+                }
             })
-        } else {
-            assign = {}
-            msg.edit({ 
-                embeds: [
-                new EmbedBuilder()
-                .setColor(0x0099FF)
-                .setTitle('Rollertoaster')
-                .setDescription(finalDesc)
-                ], 
-                components: [] 
-            }).then(msg.reactions.removeAll())
-
-            interaction.reply({
-                embeds: [
-                    new EmbedBuilder()
-                    .setColor(0x0099FF)
-                    .setTitle('Rollertoaster')
-                    .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks or Reset to reset the task list.'),
-                    new EmbedBuilder()
-                    .setColor(0x0099FF)
-                    .setTitle('Rollertoaster')
-                    .setDescription(`**Your Tasks**`)
-                ]
-            }).then(() => {
-                interaction.fetchReply()
-                .then(reply => {
-                    taskMsg = reply.id
-                    taskBtnState = true
-                })
-            })
-        }
-    }
-    
-    else if(interaction.customId == 'confirmTask') {
-        taskBtnState = false
-        interaction.channel.messages.fetch(taskMsg)
-        .then(msg => {
-            msg.edit({
-                embeds : [
-                new EmbedBuilder()
-                    .setColor(0x0099FF)
-                    .setTitle('Rollertoaster')
-                    .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks or Reset to reset the task list.'),
-                    new EmbedBuilder()
-                    .setColor(0x0099FF)
-                    .setTitle('Rollertoaster')
-                    .setDescription(`**Your Tasks**\n${tasks.map(task => `${task.index}. ${task.content}`).join('\n')}`),
-                ],
-                components : [],
-            })
-            .then(() => {
+            if (selection.length < 1) {
                 interaction.reply({
-                    content: `Please enter the number of points for task: ${tasks[0].content}`
-                }).then(msg => pointState = true)                
-            })
-        })
-    }
-    
-    else if(interaction.customId == 'resetTask') {
-        count = 0
-        interaction.channel.messages.fetch(taskMsg)
-        .then(msg => {
-            msg.edit({
-                embeds : [
-                new EmbedBuilder()
-                    .setColor(0x0099FF)
-                    .setTitle('Rollertoaster')
-                    .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks or Reset to reset the task list.'),
+                    content: "You must select atleast 1 role.",
+                    ephemeral: true
+                })
+            } else {
+                assign = {}
+                msg.edit({ 
+                    embeds: [
                     new EmbedBuilder()
                     .setColor(0x0099FF)
                     .setTitle('Rollertoaster')
-                    .setDescription(`**Your Tasks**\n${tasks.map(task => `${task.index}. ${task.content}`).join('\n')}`),
-                ]
-            })
-            
-        })
-        interaction.channel.bulkDelete(tasks.length)
-        tasks = []
-        interaction.reply({
-            content: 'Tasks reset!',
-            ephemeral: true
-        })
-    }
+                    .setDescription(finalDesc)
+                    ], 
+                    components: [] 
+                }).then(msg.reactions.removeAll())
     
-    else if(interaction.customId == 'assignTask') {
-        const msg = await reactmsg.fetch()
-        const reacts = await msg.reactions.cache
-        finalAssignment[selection[assignIndex]] = []
-        reacts.forEach(emoji => {
-            if (emoji.count > 1) {
-                finalAssignment[selection[assignIndex]].push({
-                    taskName: assign2[emoji._emoji.name].content,
-                    taskPoints : assign2[emoji._emoji.name].points
-                })
-            }
-        })
-        if (finalAssignment[selection[assignIndex]].length < 1) {
-            interaction.reply({
-                content: "You must select atleast 1 role.",
-                ephemeral: true
-            })
-        } else {
-            assignIndex++
-            msg.edit({
-                components: []
-            })
-
-            if (assignIndex < selection.length) {
-                const desc = embedTaskAssignment()
-                interaction.channel.send({
+                interaction.reply({
                     embeds: [
                         new EmbedBuilder()
                         .setColor(0x0099FF)
                         .setTitle('Rollertoaster')
-                        .setDescription(desc)
-                    ],
-                    components: [
-                        new ActionRowBuilder()
-                        .addComponents(
-                            new ButtonBuilder()
-                                .setCustomId("assignTask")
-                                .setLabel("Assign")
-                                .setStyle(ButtonStyle.Success)
-                        )
+                        .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks or Reset to reset the task list.'),
+                        new EmbedBuilder()
+                        .setColor(0x0099FF)
+                        .setTitle('Rollertoaster')
+                        .setDescription(`**Your Tasks**`)
                     ]
-                }).then(message => {
-                    reactmsg = message
-                    emojis.slice(0, tasks.length).forEach(emoji => message.react(emoji))
-                })
-            }
-            else {
-                const channel = interaction.client.channels.cache.find(channel => channel.name === "announcements")
-                interaction.channel.send({
-                    content: `Tasks have been assigned to all roles. Press the button below to announce all tasks in <#${channel.id}>.`,
-                    components: [
-                        new ActionRowBuilder()
-                        .addComponents(
-                            new ButtonBuilder()
-                                .setCustomId("announceTask")
-                                .setLabel("Announce")
-                                .setStyle(ButtonStyle.Primary)
-                        )
-                    ]
-                })
-            }
-        }
-    }
-
-    else if (interaction.customId == 'announceTask') {
-        const channel = interaction.client.channels.cache.find(channel => channel.name === "announcements")
-        const roles = interaction.guild.roles.cache
-        for (const [key, value] of Object.entries(finalAssignment)) {
-            ////////////////////////////////
-            let sContent = ""
-            const croll = roles.filter(roll => {
-                if (roll.name.startsWith('@')) {
-                    if (roll.name.substring(1, roll.length) == key) {
-                        sContent = '@everyone'
-                    }
-                    return roll.name.substring(1, roll.length) == key
-                } else {
-                    if (roll.name == key) {
-                        sContent = '<@&'
-                    }
-                    return roll.name == key
-                }
-            })
-            const id = croll.map(roll => roll.id)
-            value.forEach(task => {
-                let finalContent = ''
-                if (sContent.startsWith('@')) {
-                    finalContent = `${sContent} ${task.taskName}\nPoints: ${task.taskPoints}`
-                } else {
-                    finalContent = `${sContent}${id}> ${task.taskName}\nPoints: ${task.taskPoints}`
-                }
-                channel.send({
-                    content: finalContent,
-                    components: [
-                        new ActionRowBuilder()
-                        .addComponents(
-                            new ButtonBuilder()
-                                .setCustomId("claimTask")
-                                .setLabel("Claim")
-                                .setStyle(ButtonStyle.Primary)
-                        )
-                    ]
-                }).then(message => {
-                    reactmsg = message
-                    newTask = new Task({
-                        name: task.taskName,
-                        points: task.taskPoints,
-                        role: key,
-                        taskId: message.id,
-                        status: 'unclaimed',
-                        serverName: interaction.guild.name,
-                        serverId: interaction.guild.id,
+                }).then(() => {
+                    interaction.fetchReply()
+                    .then(reply => {
+                        taskMsg = reply.id
+                        taskBtnState = true
                     })
-
-                    newTask.save()
-                    .then()
-                    .catch(err => console.log(err))
+                })
+            }
+        }
+        
+        else if(interaction.customId == 'confirmTask') {
+            taskBtnState = false
+            interaction.channel.messages.fetch(taskMsg)
+            .then(msg => {
+                msg.edit({
+                    embeds : [
+                    new EmbedBuilder()
+                        .setColor(0x0099FF)
+                        .setTitle('Rollertoaster')
+                        .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks or Reset to reset the task list.'),
+                        new EmbedBuilder()
+                        .setColor(0x0099FF)
+                        .setTitle('Rollertoaster')
+                        .setDescription(`**Your Tasks**\n${tasks.map(task => `${task.index}. ${task.content}`).join('\n')}`),
+                    ],
+                    components : [],
+                })
+                .then(() => {
+                    interaction.reply({
+                        content: `Please enter the number of points for task: ${tasks[0].content}`
+                    }).then(msg => pointState = true)                
                 })
             })
         }
-        interaction.reply({
-            content: 'Tasks announced!',
-            ephemeral: true
-        })
-        assign = {}
-        assign2 = {}
-        selection = []
-        reactmsg = ''
-        taskBtnState = false
-        pointState = false
-        pointInCounter = 0
-        tasks = []
-        count = 0
-        taskMsg = ''
-        assignIndex = 0
-        verifyState = false
-        finalAssignment = {}
-    }
-
-    else if (interaction.customId == 'claimTask') {
-        const msg = await interaction.message.fetch()
-
-        Task.findOne({taskId: msg.id, serverId: interaction.guild.id})
-        .then((task)=>{
-
-            if(interaction.member.roles.cache.find(role => role.name == task.role) != undefined){
-                task.currentUser = `${interaction.user.username}#${interaction.user.discriminator}`
-                task.status = 'claimed'
-                task.save()
-
-                User.findOne({username: `${interaction.user.username}#${interaction.user.discriminator}`, serverId: interaction.guild.id})
-                .then(user => {
-                    if(user){
-                        user.currentTask = msg.id
-                        user.save()
-                    }else{
-                        const newUser = new User({
-                            username: `${interaction.user.username}#${interaction.user.discriminator}`,
-                            points: 0,
-                            tasksCompleted: 0,
-                            currentTask: msg.id,
+        
+        else if(interaction.customId == 'resetTask') {
+            count = 0
+            interaction.channel.messages.fetch(taskMsg)
+            .then(msg => {
+                msg.edit({
+                    embeds : [
+                    new EmbedBuilder()
+                        .setColor(0x0099FF)
+                        .setTitle('Rollertoaster')
+                        .setDescription('Please write your task and press Enter to save them one-by-one. Press Confirm when you are done saving the tasks or Reset to reset the task list.'),
+                        new EmbedBuilder()
+                        .setColor(0x0099FF)
+                        .setTitle('Rollertoaster')
+                        .setDescription(`**Your Tasks**\n${tasks.map(task => `${task.index}. ${task.content}`).join('\n')}`),
+                    ]
+                })
+                
+            })
+            interaction.channel.bulkDelete(tasks.length)
+            tasks = []
+            interaction.reply({
+                content: 'Tasks reset!',
+                ephemeral: true
+            })
+        }
+        
+        else if(interaction.customId == 'assignTask') {
+            const msg = await reactmsg.fetch()
+            const reacts = await msg.reactions.cache
+            finalAssignment[selection[assignIndex]] = []
+            reacts.forEach(emoji => {
+                if (emoji.count > 1) {
+                    finalAssignment[selection[assignIndex]].push({
+                        taskName: assign2[emoji._emoji.name].content,
+                        taskPoints : assign2[emoji._emoji.name].points
+                    })
+                }
+            })
+            if (finalAssignment[selection[assignIndex]].length < 1) {
+                interaction.reply({
+                    content: "You must select atleast 1 role.",
+                    ephemeral: true
+                })
+            } else {
+                assignIndex++
+                msg.edit({
+                    components: []
+                })
+    
+                if (assignIndex < selection.length) {
+                    const desc = embedTaskAssignment()
+                    interaction.channel.send({
+                        embeds: [
+                            new EmbedBuilder()
+                            .setColor(0x0099FF)
+                            .setTitle('Rollertoaster')
+                            .setDescription(desc)
+                        ],
+                        components: [
+                            new ActionRowBuilder()
+                            .addComponents(
+                                new ButtonBuilder()
+                                    .setCustomId("assignTask")
+                                    .setLabel("Assign")
+                                    .setStyle(ButtonStyle.Success)
+                            )
+                        ]
+                    }).then(message => {
+                        reactmsg = message
+                        emojis.slice(0, tasks.length).forEach(emoji => message.react(emoji))
+                    })
+                }
+                else {
+                    const channel = interaction.client.channels.cache.find(channel => channel.name === "announcements")
+                    interaction.channel.send({
+                        content: `Tasks have been assigned to all roles. Press the button below to announce all tasks in <#${channel.id}>.`,
+                        components: [
+                            new ActionRowBuilder()
+                            .addComponents(
+                                new ButtonBuilder()
+                                    .setCustomId("announceTask")
+                                    .setLabel("Announce")
+                                    .setStyle(ButtonStyle.Primary)
+                            )
+                        ]
+                    })
+                }
+            }
+        }
+    
+        else if (interaction.customId == 'announceTask') {
+            const channel = interaction.client.channels.cache.find(channel => channel.name === "announcements")
+            const roles = interaction.guild.roles.cache
+            for (const [key, value] of Object.entries(finalAssignment)) {
+                ////////////////////////////////
+                let sContent = ""
+                const croll = roles.filter(roll => {
+                    if (roll.name.startsWith('@')) {
+                        if (roll.name.substring(1, roll.length) == key) {
+                            sContent = '@everyone'
+                        }
+                        return roll.name.substring(1, roll.length) == key
+                    } else {
+                        if (roll.name == key) {
+                            sContent = '<@&'
+                        }
+                        return roll.name == key
+                    }
+                })
+                const id = croll.map(roll => roll.id)
+                value.forEach(task => {
+                    let finalContent = ''
+                    if (sContent.startsWith('@')) {
+                        finalContent = `${sContent} ${task.taskName}\nPoints: ${task.taskPoints}`
+                    } else {
+                        finalContent = `${sContent}${id}> ${task.taskName}\nPoints: ${task.taskPoints}`
+                    }
+                    channel.send({
+                        content: finalContent,
+                        components: [
+                            new ActionRowBuilder()
+                            .addComponents(
+                                new ButtonBuilder()
+                                    .setCustomId("claimTask")
+                                    .setLabel("Claim")
+                                    .setStyle(ButtonStyle.Primary)
+                            )
+                        ]
+                    }).then(message => {
+                        reactmsg = message
+                        newTask = new Task({
+                            name: task.taskName,
+                            points: task.taskPoints,
+                            role: key,
+                            taskId: message.id,
+                            status: 'unclaimed',
                             serverName: interaction.guild.name,
                             serverId: interaction.guild.id,
                         })
-                        newUser.save()
-                    }
-
-                    Servers.findOne({serverId: interaction.guild.id})
-                    .then(server => {
-                        if(server.memberInfo != undefined){
-                            server.memberInfo[`${interaction.user.username}#${interaction.user.discriminator}`] = {
-                                points: 0,
-                                tasksCompleted: 0,
-                            }
-                        }else{
-                            server.memberInfo = {
-                                [`${interaction.user.username}#${interaction.user.discriminator}`]: {
-                                    points: 0,
-                                    tasksCompleted: 0,
-                                }
-                            }
-                        }
-
-                        server.markModified('memberInfo')
-                        server.save()
-                        .then(()=>{
-                            msg.edit({
-                                components : [
-                                    new ActionRowBuilder()
-                                    .addComponents(
-                                        new ButtonBuilder()
-                                            .setCustomId("claimTask")
-                                            .setLabel("Claimed")
-                                            .setStyle(ButtonStyle.Primary)
-                                            .setDisabled(true)
-                                    )
-                                ]
-                            })
-                            interaction.reply({
-                                content: 'Task claimed!',
-                                ephemeral: true
-                            })
-                        })
+    
+                        newTask.save()
+                        .then()
+                        .catch(err => console.log(err))
                     })
-                    .catch(err => console.log(err))
-                })
-                .catch(err => console.log(err))
-
-            }else{
-                interaction.reply({
-                    content: 'You do not have the required role to claim this task!',
-                    ephemeral: true
                 })
             }
+            interaction.reply({
+                content: 'Tasks announced!',
+                ephemeral: true
+            })
+            assign = {}
+            assign2 = {}
+            selection = []
+            reactmsg = ''
+            taskBtnState = false
+            pointState = false
+            pointInCounter = 0
+            tasks = []
+            count = 0
+            taskMsg = ''
+            assignIndex = 0
+            verifyState = false
+            finalAssignment = {}
+        }
+    
+        else if (interaction.customId == 'claimTask') {
+            const msg = await interaction.message.fetch()
+    
+            User.findOne({username: `${interaction.user.username}#${interaction.user.discriminator}`, serverId: interaction.guild.id})
+            .then(user => {
+                if(user){
+                    if(user.currentTask != ''){
+                        interaction.reply({
+                            content: 'You have already claimed a task!',
+                            ephemeral: true
+                        })
+                        return
+                    }else{
+                        user.currentTask = msg.id
+                        user.save()
+                    }
+                }else{
+                    const newUser = new User({
+                        username: `${interaction.user.username}#${interaction.user.discriminator}`,
+                        points: 0,
+                        tasksCompleted: 0,
+                        currentTask: "",
+                        serverName: interaction.guild.name,
+                        serverId: interaction.guild.id,
+                    })
+                    newUser.save()
+                }
+    
+                Task.findOne({taskId: msg.id, serverId: interaction.guild.id})
+                .then((task)=>{
+    
+                    if(interaction.member.roles.cache.find(role => role.name == task.role) != undefined){
+                        task.currentUser = `${interaction.user.username}#${interaction.user.discriminator}`
+                        task.status = 'claimed'
+                        task.save()
+                        .then(()=>{
+                            Servers.findOne({serverId: interaction.guild.id})
+                            .then(server => {
+                                if(server.memberInfo != undefined){
+                                    server.memberInfo[`${interaction.user.username}#${interaction.user.discriminator}`] = {
+                                        points: 0,
+                                        tasksCompleted: 0,
+                                    }
+                                }else{
+                                    server.memberInfo = {
+                                        [`${interaction.user.username}#${interaction.user.discriminator}`]: {
+                                            points: 0,
+                                            tasksCompleted: 0,
+                                        }
+                                    }
+                                }
+    
+                                server.markModified('memberInfo')
+                                server.save()
+                                .then(()=>{
+                                    msg.edit({
+                                        components : [
+                                            new ActionRowBuilder()
+                                            .addComponents(
+                                                new ButtonBuilder()
+                                                    .setCustomId("claimTask")
+                                                    .setLabel("Claimed")
+                                                    .setStyle(ButtonStyle.Primary)
+                                                    .setDisabled(true)
+                                            )
+                                        ]
+                                    })
+                                    interaction.reply({
+                                        content: 'Task claimed!',
+                                        ephemeral: true
+                                    })
+                                })
+                            })
+                            .catch(err => console.log(err))
+                        })
+                        .catch(err => console.log(err))
+    
+                    }else{
+                        interaction.reply({
+                            content: 'You do not have the required role to claim this task!',
+                            ephemeral: true
+                        })
+                    }
+                })
+                .catch(err => console.log(err))
+            })
+            .catch(err => console.log(err))
+        }
+    }else{
+        interaction.reply({
+            content: 'Bot has not been started yet.',
+            ephemeral: true
         })
-        .catch(err => console.log(err))
     }
 })
 
