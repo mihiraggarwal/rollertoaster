@@ -21,6 +21,13 @@ https://user-images.githubusercontent.com/49950982/184540893-b347b39a-427d-4202-
 
 [Youtube](https://www.youtube.com/watch?v=thldVxYg4HY)
 
+## Screenshots
+<img src="https://i.imgur.com/YgUw63n.png"/><br>
+<img src="https://i.imgur.com/XKzaLxi.png"/><br>
+<img src="https://i.imgur.com/PQyoVbJ.png"/><br>
+<img src="https://i.imgur.com/ZXMLyAG.png"/><br>
+<img src="https://i.imgur.com/dT2JBl7.png"/><br>
+
 ## Getting started
 
 1. Clone the source code and install the dependencies.
